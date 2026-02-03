@@ -10,9 +10,10 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = ""
 
-    # Nanobanano Configuration
+    # Nanobanano Configuration (APIyi.com - OpenAI Images API compatible)
     nanobanano_api_key: str = ""
-    nanobanano_api_url: str = "https://api.nanobanano.pro/v1"
+    nanobanano_api_url: str = "https://api.apiyi.com/v1"
+    nanobanano_model: str = "gpt-4o-mini"
 
     # Database Configuration
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/ai_image_hub"

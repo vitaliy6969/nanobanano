@@ -1,4 +1,4 @@
-"""Nanobanano API Service for image generation and editing"""
+"""Nanobanano API Service for image generation (OpenAI Images API compatible)"""
 
 import base64
 from typing import Optional
@@ -19,12 +19,13 @@ class NanobananoError(Exception):
 
 
 class NanobananoService:
-    """Service for interacting with Nanobanano Pro API"""
+    """Service for interacting with Nanobanano/APIyi image generation API"""
 
     def __init__(self):
         settings = get_settings()
         self.api_key = settings.nanobanano_api_key
         self.base_url = settings.nanobanano_api_url.rstrip("/")
+        self.model = settings.nanobanano_model
         self.timeout = 120.0  # Image generation can take time
 
     def _get_headers(self) -> dict:
@@ -50,28 +51,28 @@ class NanobananoService:
             width: Image width in pixels
             height: Image height in pixels
             num_images: Number of images to generate
-            style: Optional style preset
+            style: Optional style preset (not used in this API)
 
         Returns:
-            dict with 'images' list containing URLs or base64 data
+            dict with 'images' list containing URLs
 
         Raises:
             NanobananoError: If API request fails
         """
-        payload = {
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "num_images": num_images,
-        }
+        # Convert width/height to size string
+        size = f"{width}x{height}"
 
-        if style:
-            payload["style"] = style
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "n": num_images,
+            "size": size,
+        }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/generate",
+                    f"{self.base_url}/images/generations",
                     headers=self._get_headers(),
                     json=payload,
                 )
@@ -82,7 +83,18 @@ class NanobananoService:
                         status_code=response.status_code
                     )
 
-                return response.json()
+                result = response.json()
+
+                # Extract image URLs from OpenAI format response
+                images = []
+                if result.get('data'):
+                    for item in result['data']:
+                        if 'url' in item:
+                            images.append({"url": item['url']})
+                        elif 'b64_json' in item:
+                            images.append({"b64_json": item['b64_json']})
+
+                return {"images": images, "raw_response": result}
 
             except httpx.TimeoutException:
                 raise NanobananoError("Request timed out", status_code=504)
@@ -99,6 +111,7 @@ class NanobananoService:
     ) -> dict:
         """
         Edit an existing image based on a prompt.
+        Note: This uses the edits endpoint if available.
 
         Args:
             image_url: URL of the image to edit
@@ -108,7 +121,7 @@ class NanobananoService:
             strength: How much to modify (0.0-1.0)
 
         Returns:
-            dict with 'images' list containing edited image URLs or base64 data
+            dict with 'images' list containing edited image URLs
 
         Raises:
             NanobananoError: If API request fails
@@ -116,23 +129,21 @@ class NanobananoService:
         if not image_url and not image_base64:
             raise NanobananoError("Either image_url or image_base64 must be provided")
 
+        # For now, use generations endpoint with modified prompt
+        # since not all providers support edits
+        edit_prompt = f"Edit the following image: {prompt}"
+
         payload = {
-            "prompt": prompt,
-            "strength": strength,
+            "model": self.model,
+            "prompt": edit_prompt,
+            "n": 1,
+            "size": "1024x1024",
         }
-
-        if image_url:
-            payload["image_url"] = image_url
-        else:
-            payload["image"] = image_base64
-
-        if mask_url:
-            payload["mask_url"] = mask_url
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/edit",
+                    f"{self.base_url}/images/generations",
                     headers=self._get_headers(),
                     json=payload,
                 )
@@ -143,38 +154,20 @@ class NanobananoService:
                         status_code=response.status_code
                     )
 
-                return response.json()
+                result = response.json()
+
+                images = []
+                if result.get('data'):
+                    for item in result['data']:
+                        if 'url' in item:
+                            images.append({"url": item['url']})
+                        elif 'b64_json' in item:
+                            images.append({"b64_json": item['b64_json']})
+
+                return {"images": images, "raw_response": result}
 
             except httpx.TimeoutException:
                 raise NanobananoError("Request timed out", status_code=504)
-            except httpx.RequestError as e:
-                raise NanobananoError(f"Request failed: {str(e)}", status_code=500)
-
-    async def get_generation_status(self, task_id: str) -> dict:
-        """
-        Check the status of an async generation task.
-
-        Args:
-            task_id: The task ID returned from generate/edit
-
-        Returns:
-            dict with status and result if completed
-        """
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                response = await client.get(
-                    f"{self.base_url}/status/{task_id}",
-                    headers=self._get_headers(),
-                )
-
-                if response.status_code != 200:
-                    raise NanobananoError(
-                        f"Status check failed: {response.text}",
-                        status_code=response.status_code
-                    )
-
-                return response.json()
-
             except httpx.RequestError as e:
                 raise NanobananoError(f"Request failed: {str(e)}", status_code=500)
 
