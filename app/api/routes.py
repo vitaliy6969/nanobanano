@@ -77,7 +77,8 @@ async def generate_image(
         # Extract image URL from result
         image_url = None
         if "images" in result and result["images"]:
-            image_url = result["images"][0].get("url") or result["images"][0].get("data")
+            first_image = result["images"][0]
+            image_url = first_image.get("url") or first_image.get("data") or first_image.get("content")
         elif "url" in result:
             image_url = result["url"]
         elif "image_url" in result:
@@ -193,7 +194,8 @@ async def edit_image(
         # Extract image URL from result
         image_url = None
         if "images" in result and result["images"]:
-            image_url = result["images"][0].get("url") or result["images"][0].get("data")
+            first_image = result["images"][0]
+            image_url = first_image.get("url") or first_image.get("data") or first_image.get("content")
         elif "url" in result:
             image_url = result["url"]
         elif "image_url" in result:

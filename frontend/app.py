@@ -205,12 +205,22 @@ def main():
                     st.markdown(f'<div class="prompt-box">{result.get("generated_prompt", "")}</div>',
                               unsafe_allow_html=True)
 
-                    # Show image
-                    if result.get("image_url"):
-                        st.image(result["image_url"], caption="Згенероване зображення")
+                    # Show image/result below
+                    st.markdown("---")
+                    st.markdown("### Результат:")
+                    image_url = result.get("image_url")
+                    if image_url:
+                        if image_url.startswith("http"):
+                            st.image(image_url, caption="Згенероване зображення", use_container_width=True)
+                        else:
+                            # If it's text content, show as text
+                            st.markdown(f"**Відповідь моделі:**")
+                            st.write(image_url)
+                    else:
+                        st.warning("URL зображення не отримано")
 
                     # Store in session for potential editing
-                    st.session_state["last_image_url"] = result.get("image_url")
+                    st.session_state["last_image_url"] = image_url
                     st.session_state["last_prompt"] = result.get("generated_prompt")
                 else:
                     error_msg = result.get("detail") or result.get("error") or "Невідома помилка"
