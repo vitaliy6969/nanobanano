@@ -1,4 +1,4 @@
-"""Nanobanano API Service for image generation (OpenAI Images API compatible)"""
+"""Nanobanano API Service for image generation (Chat Completions API)"""
 
 import base64
 from typing import Optional
@@ -44,14 +44,14 @@ class NanobananoService:
         style: Optional[str] = None,
     ) -> dict:
         """
-        Generate a new image from a text prompt.
+        Generate a new image from a text prompt using Chat Completions API.
 
         Args:
             prompt: The text prompt for image generation
-            width: Image width in pixels
-            height: Image height in pixels
+            width: Image width (not used - model decides)
+            height: Image height (not used - model decides)
             num_images: Number of images to generate
-            style: Optional style preset (not used in this API)
+            style: Optional style preset
 
         Returns:
             dict with 'images' list containing URLs
@@ -59,20 +59,26 @@ class NanobananoService:
         Raises:
             NanobananoError: If API request fails
         """
-        # nano-banana-pro supports only 1024x1024
-        size = "1024x1024"
+        # Build the image generation prompt
+        image_prompt = f"Generate an image: {prompt}"
+        if style:
+            image_prompt += f" Style: {style}"
 
         payload = {
             "model": self.model,
-            "prompt": prompt,
-            "n": num_images,
-            "size": size,
+            "stream": False,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": image_prompt
+                }
+            ]
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/images/generations",
+                    f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
                     json=payload,
                 )
@@ -85,14 +91,25 @@ class NanobananoService:
 
                 result = response.json()
 
-                # Extract image URLs from OpenAI format response
+                # Extract image URL from chat response
+                # The model returns image URL in the message content
                 images = []
-                if result.get('data'):
-                    for item in result['data']:
-                        if 'url' in item:
-                            images.append({"url": item['url']})
-                        elif 'b64_json' in item:
-                            images.append({"b64_json": item['b64_json']})
+                if result.get('choices') and len(result['choices']) > 0:
+                    content = result['choices'][0].get('message', {}).get('content', '')
+                    # Try to find URL in the response
+                    if content:
+                        # Check if content is a URL or contains URL
+                        if content.startswith('http'):
+                            images.append({"url": content.strip()})
+                        elif 'http' in content:
+                            # Extract URL from text
+                            import re
+                            urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', content)
+                            for url in urls:
+                                images.append({"url": url})
+                        else:
+                            # Content might be base64 or just text
+                            images.append({"content": content})
 
                 return {"images": images, "raw_response": result}
 
@@ -111,14 +128,13 @@ class NanobananoService:
     ) -> dict:
         """
         Edit an existing image based on a prompt.
-        Note: This uses the edits endpoint if available.
 
         Args:
             image_url: URL of the image to edit
-            image_base64: Base64-encoded image data (alternative to URL)
+            image_base64: Base64-encoded image data
             prompt: Edit instructions/prompt
-            mask_url: Optional mask URL for inpainting
-            strength: How much to modify (0.0-1.0)
+            mask_url: Optional mask URL
+            strength: How much to modify
 
         Returns:
             dict with 'images' list containing edited image URLs
@@ -129,21 +145,26 @@ class NanobananoService:
         if not image_url and not image_base64:
             raise NanobananoError("Either image_url or image_base64 must be provided")
 
-        # For now, use generations endpoint with modified prompt
-        # since not all providers support edits
-        edit_prompt = f"Edit the following image: {prompt}"
+        # Build edit prompt with image reference
+        edit_prompt = f"Edit this image: {prompt}"
+        if image_url:
+            edit_prompt = f"Based on the image at {image_url}, {prompt}"
 
         payload = {
             "model": self.model,
-            "prompt": edit_prompt,
-            "n": 1,
-            "size": "1024x1024",
+            "stream": False,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": edit_prompt
+                }
+            ]
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/images/generations",
+                    f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
                     json=payload,
                 )
@@ -157,12 +178,18 @@ class NanobananoService:
                 result = response.json()
 
                 images = []
-                if result.get('data'):
-                    for item in result['data']:
-                        if 'url' in item:
-                            images.append({"url": item['url']})
-                        elif 'b64_json' in item:
-                            images.append({"b64_json": item['b64_json']})
+                if result.get('choices') and len(result['choices']) > 0:
+                    content = result['choices'][0].get('message', {}).get('content', '')
+                    if content:
+                        if content.startswith('http'):
+                            images.append({"url": content.strip()})
+                        elif 'http' in content:
+                            import re
+                            urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', content)
+                            for url in urls:
+                                images.append({"url": url})
+                        else:
+                            images.append({"content": content})
 
                 return {"images": images, "raw_response": result}
 
