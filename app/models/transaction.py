@@ -51,7 +51,7 @@ class Transaction(Base):
         default=TransactionStatus.PENDING,
         comment="Transaction status"
     )
-    result_image_url = Column(String(2048), nullable=True, comment="URL of generated/edited image")
+    result_image_url = Column(Text, nullable=True, comment="URL or base64 data of generated/edited image")
     error_message = Column(Text, nullable=True, comment="Error message if failed")
 
     # Metadata
