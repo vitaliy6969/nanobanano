@@ -59,8 +59,8 @@ class NanobananoService:
         Raises:
             NanobananoError: If API request fails
         """
-        # Convert width/height to size string
-        size = f"{width}x{height}"
+        # nano-banana-pro supports only 1024x1024
+        size = "1024x1024"
 
         payload = {
             "model": self.model,
