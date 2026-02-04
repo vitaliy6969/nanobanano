@@ -1,6 +1,7 @@
 """Nanobanano API Service for image generation (Chat Completions API)"""
 
 import base64
+import re
 from typing import Optional
 from pathlib import Path
 
@@ -91,26 +92,7 @@ class NanobananoService:
 
                 result = response.json()
 
-                # Extract image URL from chat response
-                # The model returns image URL in the message content
-                images = []
-                if result.get('choices') and len(result['choices']) > 0:
-                    content = result['choices'][0].get('message', {}).get('content', '')
-                    # Try to find URL in the response
-                    if content:
-                        # Check if content is a URL or contains URL
-                        if content.startswith('http'):
-                            images.append({"url": content.strip()})
-                        elif 'http' in content:
-                            # Extract URL from text
-                            import re
-                            urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', content)
-                            for url in urls:
-                                images.append({"url": url})
-                        else:
-                            # Content might be base64 or just text
-                            images.append({"content": content})
-
+                images = self._parse_response(result)
                 return {"images": images, "raw_response": result}
 
             except httpx.TimeoutException:
@@ -177,26 +159,60 @@ class NanobananoService:
 
                 result = response.json()
 
-                images = []
-                if result.get('choices') and len(result['choices']) > 0:
-                    content = result['choices'][0].get('message', {}).get('content', '')
-                    if content:
-                        if content.startswith('http'):
-                            images.append({"url": content.strip()})
-                        elif 'http' in content:
-                            import re
-                            urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', content)
-                            for url in urls:
-                                images.append({"url": url})
-                        else:
-                            images.append({"content": content})
-
+                images = self._parse_response(result)
                 return {"images": images, "raw_response": result}
 
             except httpx.TimeoutException:
                 raise NanobananoError("Request timed out", status_code=504)
             except httpx.RequestError as e:
                 raise NanobananoError(f"Request failed: {str(e)}", status_code=500)
+
+    @staticmethod
+    def _parse_response(result: dict) -> list:
+        """
+        Parse chat completion response and extract images.
+
+        nano-banana-pro returns images in markdown format:
+        ![image](data:image/jpeg;base64,/9j/4AAQ...)
+
+        This method extracts the base64 data URI.
+        """
+        images = []
+        if not result.get('choices') or len(result['choices']) == 0:
+            return images
+
+        content = result['choices'][0].get('message', {}).get('content', '')
+        if not content:
+            return images
+
+        # Pattern 1: markdown image ![...](data:image/...;base64,...)
+        md_pattern = r'!\[.*?\]\((data:image/[^)]+)\)'
+        md_matches = re.findall(md_pattern, content)
+        if md_matches:
+            for data_uri in md_matches:
+                images.append({"url": data_uri})
+            return images
+
+        # Pattern 2: raw data URI
+        if content.strip().startswith('data:image/'):
+            images.append({"url": content.strip()})
+            return images
+
+        # Pattern 3: HTTP URL
+        if content.strip().startswith('http'):
+            images.append({"url": content.strip()})
+            return images
+
+        # Pattern 4: URL inside text
+        url_matches = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', content)
+        if url_matches:
+            for url in url_matches:
+                images.append({"url": url})
+            return images
+
+        # Fallback: return content as-is
+        images.append({"content": content})
+        return images
 
     @staticmethod
     def image_to_base64(image_path: str) -> str:

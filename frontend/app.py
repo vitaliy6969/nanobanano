@@ -208,16 +208,22 @@ def main():
                     # Show image/result below
                     st.markdown("---")
                     st.markdown("### Результат:")
-                    image_url = result.get("image_url")
-                    if image_url:
-                        if image_url.startswith("http"):
-                            st.image(image_url, caption="Згенероване зображення", use_container_width=True)
+                    image_data = result.get("image_url")
+                    if image_data:
+                        if image_data.startswith("data:image/"):
+                            # Base64 data URI - decode and display
+                            import base64 as b64
+                            # Extract base64 part after "base64,"
+                            b64_str = image_data.split("base64,", 1)[-1]
+                            img_bytes = b64.b64decode(b64_str)
+                            st.image(img_bytes, caption="Згенероване зображення", use_container_width=True)
+                        elif image_data.startswith("http"):
+                            st.image(image_data, caption="Згенероване зображення", use_container_width=True)
                         else:
-                            # If it's text content, show as text
                             st.markdown(f"**Відповідь моделі:**")
-                            st.write(image_url)
+                            st.write(image_data)
                     else:
-                        st.warning("URL зображення не отримано")
+                        st.warning("Зображення не отримано")
 
                     # Store in session for potential editing
                     st.session_state["last_image_url"] = image_url
