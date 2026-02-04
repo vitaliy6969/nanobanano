@@ -188,6 +188,8 @@ async def edit_image(
             image_url=request.image_url,
             image_base64=request.image_base64,
             prompt=generated_prompt,
+            width=request.width,
+            height=request.height,
             strength=request.strength,
         )
 

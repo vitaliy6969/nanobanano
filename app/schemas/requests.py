@@ -59,6 +59,18 @@ class EditRequest(BaseModel):
         max_length=2000,
         description="Description of the changes to make (any language)"
     )
+    width: int = Field(
+        default=1024,
+        ge=256,
+        le=4096,
+        description="Result image width in pixels"
+    )
+    height: int = Field(
+        default=1024,
+        ge=256,
+        le=4096,
+        description="Result image height in pixels"
+    )
     original_prompt: Optional[str] = Field(
         default=None,
         description="Original prompt used to create the image (for context)"

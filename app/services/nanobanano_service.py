@@ -60,8 +60,9 @@ class NanobananoService:
         Raises:
             NanobananoError: If API request fails
         """
-        # Build the image generation prompt
-        image_prompt = f"Generate an image: {prompt}"
+        # Build the image generation prompt with size
+        size_str = f"{width}x{height}"
+        image_prompt = f"Generate an image in {size_str} resolution: {prompt}"
         if style:
             image_prompt += f" Style: {style}"
 
@@ -105,6 +106,8 @@ class NanobananoService:
         image_url: Optional[str] = None,
         image_base64: Optional[str] = None,
         prompt: str = "",
+        width: int = 1024,
+        height: int = 1024,
         mask_url: Optional[str] = None,
         strength: float = 0.8,
     ) -> dict:
@@ -127,9 +130,11 @@ class NanobananoService:
         if not image_url and not image_base64:
             raise NanobananoError("Either image_url or image_base64 must be provided")
 
-        # Build multimodal content with text + image
+        # Build multimodal content with text + image + size
+        size_str = f"{width}x{height}" if width and height else "1024x1024"
+        edit_text = f"Edit this image in {size_str} resolution: {prompt}"
         content = [
-            {"type": "text", "text": prompt}
+            {"type": "text", "text": edit_text}
         ]
 
         # Add image to the message

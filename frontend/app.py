@@ -81,10 +81,12 @@ def generate_image(description: str, width: int, height: int, style: str = None)
         return {"error": str(e)}, 500
 
 
-def edit_image(image_url: str = None, image_base64: str = None, edit_description: str = "", strength: float = 0.7):
+def edit_image(image_url: str = None, image_base64: str = None, edit_description: str = "", width: int = 1024, height: int = 1024, strength: float = 0.7):
     """Call API to edit image"""
     payload = {
         "edit_description": edit_description,
+        "width": width,
+        "height": height,
         "strength": strength,
     }
     if image_url:
@@ -155,6 +157,15 @@ def main():
     # Main tabs
     tab1, tab2, tab3 = st.tabs(["🖼️ Генерація", "✏️ Редагування", "📜 Історія"])
 
+    # Size presets
+    SIZE_PRESETS = {
+        "📱 Сторіс (1080x1920)": (1080, 1920),
+        "📷 Пост (1024x1024)": (1024, 1024),
+        "🖥️ Горизонтальне (1920x1080)": (1920, 1080),
+        "🎬 Банер (1200x628)": (1200, 628),
+        "📐 Власний розмір": None,
+    }
+
     # Tab 1: Generation
     with tab1:
         st.header("Створення нового зображення")
@@ -170,16 +181,20 @@ def main():
             )
 
         with col2:
-            width = st.selectbox(
-                "Ширина",
-                options=[512, 768, 1024, 1536, 2048],
-                index=2,
+            size_preset = st.selectbox(
+                "Розмір зображення",
+                options=list(SIZE_PRESETS.keys()),
+                index=1,
             )
-            height = st.selectbox(
-                "Висота",
-                options=[512, 768, 1024, 1536, 2048],
-                index=2,
-            )
+
+            preset_value = SIZE_PRESETS[size_preset]
+            if preset_value:
+                width, height = preset_value
+                st.info(f"{width} x {height} px")
+            else:
+                width = st.number_input("Ширина (px)", min_value=256, max_value=4096, value=1024, step=64)
+                height = st.number_input("Висота (px)", min_value=256, max_value=4096, value=1024, step=64)
+
             style = st.selectbox(
                 "Стиль (опціонально)",
                 options=["", "photorealistic", "artistic", "anime", "digital-art", "oil-painting"],
@@ -291,14 +306,32 @@ def main():
             height=100,
         )
 
-        strength = st.slider(
-            "Сила редагування",
-            min_value=0.1,
-            max_value=1.0,
-            value=0.7,
-            step=0.1,
-            help="Чим вище значення, тим більше змін буде внесено"
-        )
+        col_edit1, col_edit2 = st.columns([1, 1])
+
+        with col_edit1:
+            edit_size_preset = st.selectbox(
+                "Розмір результату",
+                options=list(SIZE_PRESETS.keys()),
+                index=1,
+                key="edit_size",
+            )
+            edit_preset_value = SIZE_PRESETS[edit_size_preset]
+            if edit_preset_value:
+                edit_width, edit_height = edit_preset_value
+                st.info(f"{edit_width} x {edit_height} px")
+            else:
+                edit_width = st.number_input("Ширина (px)", min_value=256, max_value=4096, value=1024, step=64, key="edit_w")
+                edit_height = st.number_input("Висота (px)", min_value=256, max_value=4096, value=1024, step=64, key="edit_h")
+
+        with col_edit2:
+            strength = st.slider(
+                "Сила редагування",
+                min_value=0.1,
+                max_value=1.0,
+                value=0.7,
+                step=0.1,
+                help="Чим вище значення, тим більше змін буде внесено"
+            )
 
         if st.button("✏️ Редагувати", type="primary", use_container_width=True):
             if not image_url and not image_base64:
@@ -313,6 +346,8 @@ def main():
                         image_url=image_url,
                         image_base64=image_base64,
                         edit_description=edit_description,
+                        width=edit_width,
+                        height=edit_height,
                         strength=strength,
                     )
 
