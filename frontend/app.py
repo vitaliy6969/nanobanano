@@ -216,9 +216,9 @@ def main():
                             # Extract base64 part after "base64,"
                             b64_str = image_data.split("base64,", 1)[-1]
                             img_bytes = b64.b64decode(b64_str)
-                            st.image(img_bytes, caption="Згенероване зображення", use_container_width=True)
+                            st.image(img_bytes, caption="Згенероване зображення", use_column_width=True)
                         elif image_data.startswith("http"):
-                            st.image(image_data, caption="Згенероване зображення", use_container_width=True)
+                            st.image(image_data, caption="Згенероване зображення", use_column_width=True)
                         else:
                             st.markdown(f"**Відповідь моделі:**")
                             st.write(image_data)
@@ -226,7 +226,7 @@ def main():
                         st.warning("Зображення не отримано")
 
                     # Store in session for potential editing
-                    st.session_state["last_image_url"] = image_url
+                    st.session_state["last_image_url"] = image_data
                     st.session_state["last_prompt"] = result.get("generated_prompt")
                 else:
                     error_msg = result.get("detail") or result.get("error") or "Невідома помилка"
