@@ -109,7 +109,7 @@ class NanobananoService:
         strength: float = 0.8,
     ) -> dict:
         """
-        Edit an existing image based on a prompt.
+        Edit an existing image based on a prompt using multimodal Chat API.
 
         Args:
             image_url: URL of the image to edit
@@ -127,10 +127,24 @@ class NanobananoService:
         if not image_url and not image_base64:
             raise NanobananoError("Either image_url or image_base64 must be provided")
 
-        # Build edit prompt with image reference
-        edit_prompt = f"Edit this image: {prompt}"
-        if image_url:
-            edit_prompt = f"Based on the image at {image_url}, {prompt}"
+        # Build multimodal content with text + image
+        content = [
+            {"type": "text", "text": prompt}
+        ]
+
+        # Add image to the message
+        if image_base64:
+            # Base64 data URI
+            image_uri = f"data:image/jpeg;base64,{image_base64}"
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": image_uri}
+            })
+        elif image_url:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": image_url}
+            })
 
         payload = {
             "model": self.model,
@@ -138,7 +152,7 @@ class NanobananoService:
             "messages": [
                 {
                     "role": "user",
-                    "content": edit_prompt
+                    "content": content
                 }
             ]
         }
