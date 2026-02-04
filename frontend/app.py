@@ -81,13 +81,16 @@ def generate_image(description: str, width: int, height: int, style: str = None)
         return {"error": str(e)}, 500
 
 
-def edit_image(image_url: str, edit_description: str, strength: float):
+def edit_image(image_url: str = None, image_base64: str = None, edit_description: str = "", strength: float = 0.7):
     """Call API to edit image"""
     payload = {
-        "image_url": image_url,
         "edit_description": edit_description,
         "strength": strength,
     }
+    if image_url:
+        payload["image_url"] = image_url
+    if image_base64:
+        payload["image_base64"] = image_base64
 
     try:
         response = requests.post(
@@ -236,20 +239,51 @@ def main():
     with tab2:
         st.header("Редагування зображення")
 
-        # Option to use last generated image
-        use_last = False
-        if st.session_state.get("last_image_url"):
-            use_last = st.checkbox("Використати останнє згенероване зображення")
+        # Image source selection
+        import base64 as b64
 
-        if use_last:
-            image_url = st.session_state["last_image_url"]
-            st.image(image_url, caption="Зображення для редагування", width=300)
-        else:
+        image_source = st.radio(
+            "Джерело зображення:",
+            options=["Завантажити файл", "Вставити URL", "Останнє згенероване"],
+            horizontal=True,
+        )
+
+        image_url = None
+        image_base64 = None
+
+        if image_source == "Завантажити файл":
+            uploaded_file = st.file_uploader(
+                "Оберіть зображення",
+                type=["png", "jpg", "jpeg", "webp"],
+                help="Завантажте зображення з телефону або комп'ютера"
+            )
+            if uploaded_file:
+                file_bytes = uploaded_file.read()
+                st.image(file_bytes, caption="Зображення для редагування", use_column_width=True)
+                image_base64 = b64.b64encode(file_bytes).decode("utf-8")
+
+        elif image_source == "Вставити URL":
             image_url = st.text_input(
                 "URL зображення",
                 placeholder="https://example.com/image.jpg",
                 help="Введіть URL зображення, яке потрібно відредагувати"
             )
+            if image_url:
+                st.image(image_url, caption="Зображення для редагування", use_column_width=True)
+
+        elif image_source == "Останнє згенероване":
+            last_url = st.session_state.get("last_image_url")
+            if last_url:
+                if last_url.startswith("data:image/"):
+                    b64_str = last_url.split("base64,", 1)[-1]
+                    img_bytes = b64.b64decode(b64_str)
+                    st.image(img_bytes, caption="Зображення для редагування", use_column_width=True)
+                    image_base64 = b64_str
+                elif last_url.startswith("http"):
+                    st.image(last_url, caption="Зображення для редагування", use_column_width=True)
+                    image_url = last_url
+            else:
+                st.info("Спочатку згенеруйте зображення на вкладці 'Генерація'")
 
         edit_description = st.text_area(
             "Опис змін",
@@ -267,15 +301,20 @@ def main():
         )
 
         if st.button("✏️ Редагувати", type="primary", use_container_width=True):
-            if not image_url:
-                st.error("Будь ласка, введіть URL зображення")
+            if not image_url and not image_base64:
+                st.error("Будь ласка, завантажте зображення або введіть URL")
             elif not edit_description:
                 st.error("Будь ласка, опишіть бажані зміни")
             elif not API_TOKEN:
                 st.error("Будь ласка, введіть API токен в налаштуваннях")
             else:
                 with st.spinner("Редагування зображення..."):
-                    result, status_code = edit_image(image_url, edit_description, strength)
+                    result, status_code = edit_image(
+                        image_url=image_url,
+                        image_base64=image_base64,
+                        edit_description=edit_description,
+                        strength=strength,
+                    )
 
                 if status_code == 200 and result.get("success"):
                     st.success("Зображення успішно відредаговано!")
@@ -284,9 +323,21 @@ def main():
                     st.markdown(f'<div class="prompt-box">{result.get("generated_prompt", "")}</div>',
                               unsafe_allow_html=True)
 
-                    if result.get("image_url"):
-                        st.image(result["image_url"], caption="Відредаговане зображення")
-                        st.session_state["last_image_url"] = result.get("image_url")
+                    st.markdown("---")
+                    st.markdown("### Результат:")
+                    edit_result = result.get("image_url")
+                    if edit_result:
+                        if edit_result.startswith("data:image/"):
+                            b64_str = edit_result.split("base64,", 1)[-1]
+                            img_bytes = b64.b64decode(b64_str)
+                            st.image(img_bytes, caption="Відредаговане зображення", use_column_width=True)
+                        elif edit_result.startswith("http"):
+                            st.image(edit_result, caption="Відредаговане зображення", use_column_width=True)
+                        else:
+                            st.write(edit_result)
+                        st.session_state["last_image_url"] = edit_result
+                    else:
+                        st.warning("Зображення не отримано")
                 else:
                     error_msg = result.get("detail") or result.get("error") or "Невідома помилка"
                     st.error(f"Помилка редагування: {error_msg}")
